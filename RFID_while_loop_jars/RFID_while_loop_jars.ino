@@ -42,6 +42,24 @@
 
 #include <SPI.h>
 #include <MFRC522.h>
+#include <PubSubClient.h>
+#include <WiFi.h>
+
+// Replace the next variables with your SSID/Password combination
+const char* ssid = "";
+const char* password = "";
+// Add your MQTT Broker IP address, example:
+//const char* mqtt_server = "192.168.1.144";
+const char* mqtt_server = "";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+long lastMsg = 0;
+char msg[50];
+int value = 0;
+//// MQTT broker////
+
+
 
 #define RST_PIN         22          // Configurable, see typical pin layout above
 #define SS_PIN          5         // Configurable, see typical pin layout above
@@ -55,14 +73,95 @@ bool Jar_2 = false;
 void setup() 
 {
   Serial.begin(115200);   // Initiate a serial communication
+  /// wifi///
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+  /// wifi ////
   SPI.begin();      // Initiate  SPI bus
   mfrc522.PCD_Init();   // Initiate MFRC522
   Serial.println("Approximate your card to the reader...");
   Serial.println();
 
+  ////MQTT////
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);
+  ////MQTT////
 }
+
+
+void callback(char* topic, byte* message, unsigned int length) {
+  Serial.print("Message arrived on topic: ");
+  Serial.print(topic);
+  Serial.print(". Message: ");
+  String messageTemp;
+  
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)message[i]);
+    messageTemp += (char)message[i];
+  }
+  Serial.println();
+
+  // Feel free to add more if statements to control more GPIOs with MQTT
+
+  // If a message is received on the topic esp32/output, you check if the message is either "on" or "off". 
+  // Changes the output state according to the message
+  if (String(topic) == "esp32/output") {
+    Serial.print("Changing output to ");
+    if(messageTemp == "on"){
+      Serial.println("on");
+      //digitalWrite(ledPin, HIGH);
+    }
+    else if(messageTemp == "off"){
+      Serial.println("off");
+      //digitalWrite(ledPin, LOW);
+    }
+  }
+}
+
+void reconnect() {
+  // Loop until we're reconnected
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (client.connect("ESP8266Client")) {
+      Serial.println("connected");
+      // Subscribe
+      client.subscribe("esp32/output");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+}
+
+
+
+
 void loop() 
 {
+if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+
+  long now = millis();
+  if (now - lastMsg > 5000) {
+    lastMsg = now;
+
+  
 // Wake up all cards present within the sensor/reader range.
   bool cardPresent = PICC_IsAnyCardPresent();
   
@@ -116,8 +215,18 @@ void loop()
     locked=false;
     mfrc522.uid.size = 0;
     // Action on card removal.
+    /*
+    char tempString[8];
+    dtostrf(temperature, 1, 2, tempString);
+    Serial.print("Temperature: ");
+    Serial.println(tempString);
+    client.publish("esp32/temperature", tempString);
+    */
     Serial.print(F("Jar 1 removed! Reason for unlocking: "));
     Serial.println(mfrc522.GetStatusCodeName(result));  
+    /// mqtt message to appear at mqtt broker///
+    client.publish("esp32/Jar1","Jar 1 removed!");
+    /// mqtt message to appear at mqtt broker///
   } 
   else if(Jar_2 && result != MFRC522::STATUS_OK)
   {
@@ -125,8 +234,18 @@ void loop()
     locked=false;
     mfrc522.uid.size = 0;
     // Action on card removal.
+    /*
+    char tempString[8];
+    dtostrf(temperature, 1, 2, tempString);
+    Serial.print("Temperature: ");
+    Serial.println(tempString);
+    client.publish("esp32/temperature", tempString);
+    */
     Serial.print(F("Jar 2 removed! Reason for unlocking: "));
     Serial.println(mfrc522.GetStatusCodeName(result));
+    /// mqtt message to appear at mqtt broker///
+    client.publish("esp32/Jar2","Jar 2 removed!");
+    /// mqtt message to appear at mqtt broker///
   }
   else if(!locked && result != MFRC522::STATUS_OK)
   {
@@ -136,6 +255,7 @@ void loop()
   }
 
   mfrc522.PICC_HaltA();
+}
 }
 
 /**

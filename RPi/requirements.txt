@@ -1,0 +1,6 @@
+
+sudo apt-get install chromium-chromedriver
+sudo pip3 install selenium
+sudo pip3 install pyautogui
+sudo pip3 install paho-mqtt
+sudo apt install -y mosquitto mosquitto-clients
