@@ -1,3 +1,4 @@
+# https://core-electronics.com.au/guides/getting-started-with-home-automation-using-mqtt/
 # MQTT Client demo
 # Continuously monitor two different MQTT topics for data,
 # check if the received data matches two predefined 'commands'
